@@ -1,0 +1,20 @@
+{
+    "white_player": {
+      "name": "gpt-4.1",
+      "api_key": "sk-w3cl6Nrocmz3F5UlEa06Ec80837c48DbB86679Dd585fF4E6",
+      "base_url": "http://internal.ai-chat.host/v1",
+      "model": "gpt-4.1",
+      "max_tokens": 2048,
+      "provide_legal_moves": true
+    },
+    "black_player": {
+      "name": "api_9",
+      "base_url": "http://localhost:8012",
+      "model": "api_9",
+      "max_tokens": 2048,
+      "provide_legal_moves": true
+    },
+    "max_moves": 200,
+    "max_retries": 3,
+    "stockfish_path": "./stockfish-8-linux/Linux/stockfish_8_x64"
+}
