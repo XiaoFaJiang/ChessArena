@@ -129,3 +129,13 @@ Our reward function is in `./chess_train/verl/verl/utils/reward_score/chess.py`.
 You can modify the reward_score yourself and conduct training.
 
 For specific usage of the Verl framework, you can refer to the official Verl documentation and GitHub (unrelated to this paper's authors): https://verl.readthedocs.io/en/latest/start/install.html and https://github.com/volcengine/verl
+
+# Citation
+```
+@article{liu2025chessarena,
+  title={ChessArena: A Chess Testbed for Evaluating Strategic Reasoning Capabilities of Large Language Models},
+  author={Liu, Jincheng and He, Sijun and Wu, Jingjing and Wang, Xiangsen and Chen, Yang and Kuang, Zhaoqi and Bao, Siqi and Yao, Yuan},
+  journal={arXiv preprint arXiv:2509.24239},
+  year={2025}
+}
+```
