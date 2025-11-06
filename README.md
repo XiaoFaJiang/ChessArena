@@ -81,7 +81,9 @@ https://huggingface.co/datasets/ljcnju/ChessArena_Training_Dataset
 
 **Our trained models**
 SFT stage-2: https://huggingface.co/ljcnju/Qwen3-8B-Chess-SFT
+
 RL: https://huggingface.co/ljcnju/Qwen3-8B-Chess
+
 **Training Code**
 
 We have saved all our training code in the `./chess_train` folder: SFT-stage1, SFT-stage2 (LLamaFactory), and RL (Verl) training.
