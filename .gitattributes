@@ -1,0 +1,2 @@
+chess_train/verl/data/*.jsonl filter=lfs diff=lfs merge=lfs -text
+chess_train/LLaMA-Factory/data/*.jsonl filter=lfs diff=lfs merge=lfs -text

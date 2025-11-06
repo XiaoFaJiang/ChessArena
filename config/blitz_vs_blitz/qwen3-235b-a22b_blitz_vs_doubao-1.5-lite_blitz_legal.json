@@ -1,0 +1,25 @@
+{
+    "white_player": {
+        "name": "qwen3-235b-a22b_blitz",
+        "api_key": "your key",
+        "base_url": "your url",
+        "model": "qwen3-235b-a22b",
+        "max_tokens": 4096,
+        "play_mode": "blitz",
+        "provide_legal_moves": true,
+        "provide_move_history": true
+    },
+    "black_player": {
+        "name": "doubao-1.5-lite_blitz",
+        "api_key": "your key",
+        "base_url": "your url",
+        "model": "doubao-1.5-lite",
+        "max_tokens": 4096,
+        "play_mode": "blitz",
+        "provide_legal_moves": true,
+        "provide_move_history": true
+    },
+    "max_moves": 200,
+    "max_retries": 5,
+    "stockfish_path": "./stockfish-8-linux/Linux/stockfish_8_x64"
+}

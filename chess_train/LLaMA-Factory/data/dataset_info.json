@@ -1,0 +1,49 @@
+{
+  "chess_top3_blitz_legal": {
+    "file_name": "chess_top3_blitz_legal.jsonl",
+    "columns": {
+      "prompt": "prompt",
+      "system": "system",
+      "response": "response"
+    }
+  },
+  "chess_top3_blitz_no_legal": {
+    "file_name": "chess_top3_blitz_no_legal.jsonl",
+    "columns": {
+      "prompt": "prompt",
+      "system": "system",
+      "response": "response"
+    }
+  },
+  "multi_round_fix_chess": {
+    "file_name": "multi_round_fix_chess.jsonl",
+    "columns": {
+      "prompt": "prompt",
+      "system": "system",
+      "response": "response",
+      "history": "history"
+    }
+  },
+  "gpt4_chess_conversation": {
+    "file_name": "gpt4_chess_conversation.jsonl",
+    "columns": {
+      "prompt": "prompt",
+      "response": "answer"
+    }
+  },
+  "chess_modeling_gpt4": {
+    "file_name": "chess_modeling_gpt4.jsonl",
+    "columns": {
+      "system": "instruction",
+      "prompt": "prompt",
+      "response": "response"
+    }
+  },
+  "chess_forum_conversation": {
+    "file_name": "chess_forum_conversation.jsonl",
+    "columns": {
+      "prompt": "prompt",
+      "response": "answer"
+    }
+  }
+}
