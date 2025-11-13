@@ -10,7 +10,7 @@ finetuning_type: full
 deepspeed: examples/deepspeed/ds_z2_config.json  # choices: [ds_z0_config.json, ds_z2_config.json, ds_z3_config.json]
 
 ### dataset
-dataset: chess_top3_blitz_legal,chess_top3_blitz_no_legal,multi_round_fix_chess
+dataset: chess_top3_blitz,multi_round_fix_chess
 template: qwen3
 cutoff_len: 4096
 overwrite_cache: true

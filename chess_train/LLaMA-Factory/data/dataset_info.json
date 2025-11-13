@@ -1,14 +1,14 @@
 {
-  "chess_top3_blitz_legal": {
-    "file_name": "chess_top3_blitz_legal.jsonl",
+  "chess_top3_blitz": {
+    "file_name": "blitz_chess_top_3_game.jsonl",
     "columns": {
       "prompt": "prompt",
       "system": "system",
       "response": "response"
     }
   },
-  "chess_top3_blitz_no_legal": {
-    "file_name": "chess_top3_blitz_no_legal.jsonl",
+  "chess_top3_standard": {
+    "file_name": "standard_chess_top_3_game.jsonl",
     "columns": {
       "prompt": "prompt",
       "system": "system",
@@ -16,7 +16,7 @@
     }
   },
   "multi_round_fix_chess": {
-    "file_name": "multi_round_fix_chess.jsonl",
+    "file_name": "multi_round_fix_data.jsonl",
     "columns": {
       "prompt": "prompt",
       "system": "system",

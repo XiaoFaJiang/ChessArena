@@ -56,7 +56,7 @@ In ChessArena, we have three fine-grained evaluation tasks: basic understanding,
 
 For example, basic understanding:
 ```bash
-python static.py \
+python fine_grained_evaluation.py \
     --task "basic_understanding" \
     --model_id "your model id" \
     --api_key "your api key" \
