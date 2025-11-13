@@ -1,8 +1,10 @@
-# ♟️ ChessArena: A Chess Testbed for LLM Strategic Reasoning
+# ♟️ ChessArena: A Chess Testbed for Evaluating Strategic Reasoning Capabilities of Large Language Models
 
 [![arXiv](https://img.shields.io/badge/arXiv-2509.24239-b31b1b.svg)](https://arxiv.org/abs/2509.24239)
 [![Hugging Face Dataset](https://img.shields.io/badge/🤗-Dataset-yellow.svg)](https://huggingface.co/datasets/ljcnju/ChessArena_Training_Dataset)
 [![Hugging Face Models](https://img.shields.io/badge/🤗-Models-yellow.svg)](https://huggingface.co/ljcnju/Qwen3-8B-Chess-SFT)
+[![Hugging Face Models](https://img.shields.io/badge/🤗-Models-yellow.svg)](https://huggingface.co/ljcnju/Qwen3-8B-Chess)
+
 
 > *Official repository for ChessArena: A Chess Testbed for Evaluating Strategic Reasoning Capabilities of Large Language Models*
 
@@ -10,7 +12,7 @@
 
 ChessArena is a comprehensive framework for evaluating and enhancing strategic reasoning capabilities in Large Language Models through chess. This repository contains four key components:
 
-1. **♟️ Chess Competition Sampling** - Automated tournament systems for faster convergence
+1. **♟️ Chess Competition Sampling** - Automated competition systems for faster convergence
 2. **📊 Glicko-1 Ranking System** - Robust rating calculations  
 3. **🎯 Fine-grained Evaluation Tasks** - Three specialized assessment dimensions: why model fails on chess?
 4. **🏋️ Chess Training** - Full training pipeline for chess reasoning
@@ -43,10 +45,18 @@ python competition_sampling.py \
     --player1_name "gpt-4.1_blitz_True"
 ```
 
-Where player1_id is the model ID in OpenAI API format; player1_name can be set to any name, but must be followed by the model's play mode and whether legal moves are provided. Ensure that player1_name exists in ./simulation_record/ratings.json. This gives the first player and uses our competition sampling algorithm to select the second player. Through these two methods, you can perform match-making and conduct games.
+Where player1_id is the model ID in OpenAI API format; player1_name can be set to any name, but must be followed by the model's play mode and whether legal moves are provided. 
 
-#### Manual Tournament Configuration
-For competition matching algorithms, we add corresponding competition configs in the ./config directory and start games based on these configs. We provide some config examples in the ./config folder for your reference. You can write your own desired model matchups based on these configs.
+**Ensure** that player1_name exists in ./simulation_record/ratings.json. 
+
+This gives the first player and uses our competition sampling algorithm to select the second player. Through these two methods, you can perform match-making and conduct games.
+
+#### Manual competition Configuration
+For competition matching algorithms, we add corresponding competition configs in the 
+```
+./config
+``` 
+directory and start games based on these configs. You can write your own desired model matchups based on these configs.
 
 Use the following code to start you game:
 ```bash
@@ -55,14 +65,13 @@ python run_simulation.py \
     --games 4 \
     --parallel 2
 ```
-Configuration examples are available in the ./config directory.
+
 #### Prompt
 You can adjust the game prompts for each mode in utils.py (if you think it's necessary).
 
 #### Glicko Rating System
 Calculate comprehensive model ratings:
-```
-bash
+```bash
 python elo_calculate.py
 ```
 Obtain Glicko scores for all model competition results.
@@ -84,10 +93,13 @@ You can also pass parameters like $temperature, top\_p, max\_tokens$ etc. to con
 In fine-grained_evaluation.py, there is also a board_reconstruction task, which is a board reconstruction task for blindfold mode. If you're interested, you can also conduct experiments with it.
 
 #### Scripts
-We have saved example scripts in ./scripts for your reference.
+We have saved example scripts in 
+```
+./scripts
+```
+for your reference.
 
 ### Chess Training
-## Chess Training
 
 All our training was completed on 8 H800 GPUs. SFT training takes about 4 hours; RL training takes about 60 hours.
 
