@@ -15,7 +15,9 @@ import plotly.offline as pyo
 import math
 from math import sqrt
 from typing import Any
+from collections import Counter
 
+PLAY_MODE_MAP = {"blitz":"blitz","standard":"standard","bullet":"bullet","blindfold_multiTurn":"blindfold","blindfold":"blindfold"}
 class EloCalculator:
     def __init__(self, k_factor: int = 32, initial_rating: int = 1500, initial_RD: int = 350, min_RD: int = 50):
         """
@@ -33,7 +35,8 @@ class EloCalculator:
         self.players: Dict[str, Dict[str, Any]] = {}  # Store player information
         self.games_history = []  # Store all game history
         self.q = math.log(10)/400  # Glicko-1 q constant
-    
+        self.termination_stats = Counter()
+        
     def g_RD(self, RD: float) -> float:
         """Calculate g(RD) function for Glicko system"""
         return 1 / sqrt(1 + (3 * self.q**2 * RD**2) / (math.pi**2))
@@ -166,11 +169,14 @@ class EloCalculator:
         if player not in self.players:
             self.players[player] = {}
         
-        total_attempts = attempt_stats['total_attempts']
+        
+        #total_attempts = attempt_stats['total_attempts']
         parsing_errors = attempt_stats['parsing_errors']
         illegal_moves = attempt_stats['illegal_moves']
         forbidden_thinking = attempt_stats.get('forbidden_thinking', 0)
         successful_moves = attempt_stats['successful_moves']
+        total_attempts = parsing_errors + illegal_moves + forbidden_thinking + successful_moves
+        #assert parsing_errors + illegal_moves + forbidden_thinking + successful_moves == total_attempts
         total_moves = attempt_stats['total_moves']
         optimal_moves = attempt_stats['optimal_moves']
         if 'attempt_stats' in self.players[player]:
@@ -184,18 +190,26 @@ class EloCalculator:
             stats['total_moves'] += total_moves
             stats['optimal_moves'] += optimal_moves
             if win == 1:
-                stats["win_num"] += win
+                stats["win_num"] += 1
                 if stats["win_avg_move"] == 0:
                     stats["win_avg_move"] = total_moves
                 else:
                     stats["win_avg_move"] = (stats["win_avg_move"] * (stats["win_num"] - 1) + total_moves ) / stats["win_num"]
             if win == 0:
-                stats["lose_num"] += 1 if not win else 0
+                stats["lose_num"] += 1
                 if stats["lose_avg_move"] == 0:
                     stats["lose_avg_move"] = total_moves
                 else:
                     stats["lose_avg_move"] = (stats["lose_avg_move"] * (stats["lose_num"] - 1) + total_moves ) / stats["lose_num"]
-                
+            #parsing error: 指模型输出move不符合format的次数，除以总的attempt次数
+            #illegal move: 指模型输出move不符合legal moves的
+            if win == 0.5:
+                stats["draw_num"] += 1
+                if stats["draw_avg_move"] == 0:
+                    stats["draw_avg_move"] = total_moves
+                else:
+                    stats["draw_avg_move"] = (stats["draw_avg_move"] * (stats["draw_num"] - 1) + total_moves ) / stats["draw_num"]
+            
             # Recalculate percentages
             if stats['total_attempts'] > 0:
                 stats['parsing_errors_pct'] = stats['parsing_errors'] / stats['total_attempts'] * 100
@@ -204,6 +218,7 @@ class EloCalculator:
                 stats['illegal_moves_pct'] = stats['illegal_moves'] / stats['total_attempts'] * 100
                 
             if stats['total_moves'] > 0:
+                
                 stats['optimal_moves_pct'] = stats['optimal_moves'] / stats['total_moves'] * 100
         else:
             # Initialize statistics
@@ -226,11 +241,14 @@ class EloCalculator:
                 "forbidden_thinking_pct": forbidden_thinking_pct,
                 "successful_moves_pct": successful_moves_pct,
                 "optimal_moves_pct": optimal_moves_pct,
-                "win_num":win,
-                "win_avg_move":total_moves/1 if win == 1 else 0,
+                "win_num":1 if win == 1 else 0,
+                "win_avg_move":total_moves if win == 1 else 0,
                 "lose_num":1 if not win else 0,
-                "lose_avg_move":total_moves/1 if win == 0 else 0,
+                "lose_avg_move":total_moves if win == 0 else 0,
+                "draw_num":1 if win == 0.5 else 0,
+                "draw_avg_move":total_moves if win == 0.5 else 0
             }
+        
     
     def update_player_attempt_stats(self, game_json):
         """
@@ -242,14 +260,16 @@ class EloCalculator:
                 player1 = "random_player_blitz_True"
             
             player1_lst = player1.split("_")
-            player1_name = '_'.join(player1_lst[:-1])
-            
+            player1_name = '_'.join(player1_lst[:-min(1,len(player1_lst))])
+            player1_prefix = "_".join(player1_lst[:-min(2,len(player1_lst))])
             player1_attempt_stats = None
             # Find statistics for player1
             if game_json['player_attempt_stats'].get(player1, None):
                 player1_attempt_stats = game_json['player_attempt_stats'][player1]
             elif game_json['player_attempt_stats'].get(player1_name, None):
                 player1_attempt_stats = game_json['player_attempt_stats'][player1_name]
+            elif game_json['player_attempt_stats'].get(player1_prefix, None):
+                player1_attempt_stats = game_json['player_attempt_stats'][player1_prefix]
             if not (player1.endswith("False") or player1.endswith("True")):
                 player1 = f"{player1}_{game_json.get('white_player_provide_legal_moves',True)}"
             win = (eval(game_json["result"]) + 1) / 2
@@ -261,14 +281,16 @@ class EloCalculator:
             if "random" in player2:
                 player2 = "random_player_blitz_True"
             player2_lst = player2.split("_")
-            player2_name = '_'.join(player2_lst[:-1])
+            player2_name = '_'.join(player2_lst[:-min(1,len(player2_lst))])
+            player2_prefix = "_".join(player2_lst[:-min(2,len(player2_lst))])
             player2_attempt_stats = None
                 
             if game_json['player_attempt_stats'].get(player2, None):
                 player2_attempt_stats = game_json['player_attempt_stats'][player2]
             elif game_json['player_attempt_stats'].get(player2_name, None):
                 player2_attempt_stats = game_json['player_attempt_stats'][player2_name]
-            
+            elif game_json['player_attempt_stats'].get(player2_prefix, None):
+                player2_attempt_stats = game_json['player_attempt_stats'][player2_prefix]
             if not (player2.endswith("False") or player2.endswith("True")):
                 player2 = f"{player2}_{game_json.get('black_player_provide_legal_moves',True)}"
             if player2_attempt_stats:
@@ -276,6 +298,7 @@ class EloCalculator:
                 
         except Exception as e:
             print(f"Error updating attempt stats: {e}")
+            print(game_json["game_id"],game_json["white_player"],game_json["black_player"])
         
     def load_game_result(self, game_json: dict):
         """
@@ -284,9 +307,13 @@ class EloCalculator:
         try:
             result = game_json['result']
             result = (eval(result) + 1) / 2
+            
             player1 = game_json['white_player']
             player2 = game_json['black_player']
             game_id = game_json["game_id"]
+            termination = game_json["termination"]
+            self.termination_stats[termination] += 1
+            
             if "random" in player1.lower():
                 player1 = "random_player_blitz"
             if "random" in player2.lower():
@@ -298,7 +325,34 @@ class EloCalculator:
             if not (player2.endswith("False") or player2.endswith("True")):
                 player2 = f'{player2}_{player2_with_legal_moves}'
             self.update_rating(player1, player2, result, game_id)
-            
+            #print(result,termination)
+            if result == 1:
+                if "win_termination" not in self.players[player1]:
+                    self.players[player1]["win_termination"] = Counter()
+                self.players[player1]["win_termination"][termination] += 1
+                
+                if "loss_termination" not in self.players[player2]:
+                    self.players[player2]["loss_termination"] = Counter()
+                self.players[player2]["loss_termination"][termination] += 1
+            elif result == 0:
+                if "win_termination" not in self.players[player2]:
+                    self.players[player2]["win_termination"] = Counter()
+                self.players[player2]["win_termination"][termination] += 1
+                
+                if "loss_termination" not in self.players[player1]:
+                    self.players[player1]["loss_termination"] = Counter()
+                self.players[player1]["loss_termination"][termination] += 1
+                    
+            elif result == 0.5:
+                if "draw_termination" not in self.players[player2]:
+                    self.players[player2]["draw_termination"] = Counter()
+                self.players[player2]["draw_termination"][termination] += 1
+                    
+                if "draw_termination" not in self.players[player1]:
+                    self.players[player1]["draw_termination"] = Counter()
+                self.players[player1]["draw_termination"][termination] += 1
+                    
+                    
         except FileNotFoundError:
             print(f"File {game_json} not found")
         except Exception as e:
@@ -422,6 +476,59 @@ class EloCalculator:
             print(f"{index:<4} {model_name:<50} {oneType:<10} {with_legal_moves:<8} {rating:<8.1f} {int(RD):<6} ({interval_left:<4}, {interval_right:<4}) {games:<6}")
             index += 1
         print(f"{'='*110}")
+    
+    def print_player_terminations(self):
+        """
+        Print player terminations and save to CSV file
+        """
+        # Define all termination types
+        termination_types = ['checkmate', 'forfeit', 'stalemate', 'move_limit', 'insufficient_material','fivefold_repetition']
+        
+        # Collect termination data for all players
+        termination_data = []
+        player_terminated = [(name,info.get('win_termination',{}),info.get('loss_termination',{}),info.get('draw_termination',{}), info.get('rating',1500)) 
+                        for name, info in self.players.items()]
+        player_terminated = sorted(player_terminated,key = lambda x:x[-1],reverse=True)
+        
+        for player, win_terminations, loss_terminations, draw_terminations,_ in player_terminated:            
+            # Prepare row data for CSV
+            player_data = {'player': player}
+            
+            # Add win, loss and draw terminations for each type
+            for term_type in termination_types:
+                player_data[f'win_{term_type}'] = win_terminations.get(term_type, 0)
+                player_data[f'loss_{term_type}'] = loss_terminations.get(term_type, 0)
+                player_data[f'draw_{term_type}'] = draw_terminations.get(term_type, 0)
+            
+            # Calculate totals
+            player_data['total_wins'] = sum(win_terminations.values())
+            player_data['total_losses'] = sum(loss_terminations.values())
+            player_data['total_draws'] = sum(draw_terminations.values())
+            
+            termination_data.append(player_data)
+        
+        # Create DataFrame and save to CSV
+        if termination_data:
+            df = pd.DataFrame(termination_data)
+            
+            # Reorder columns to have player first, then totals, then terminations
+            columns_order = ['player', 'total_wins', 'total_losses', 'total_draws']
+            for term_type in termination_types:
+                columns_order.extend([f'win_{term_type}', f'loss_{term_type}', f'draw_{term_type}'])
+            
+            df = df[columns_order]
+            
+            # Save to CSV
+            csv_filename = 'player_terminations.csv'
+            df.to_csv(csv_filename, index=False)
+            print(f"Termination statistics saved to {csv_filename}")
+            print(f"DataFrame shape: {df.shape}")
+            print("\nPreview of the data:")
+            print(df.head())
+        else:
+            print("No termination data available to save.")
+        
+
 
     def add_player(self,player_name,type):
         if f"{player_name}_{type}" not in self.players:
@@ -433,7 +540,7 @@ class EloCalculator:
         """
         attempt_stats = self.get_attempt_stats()
         print(f"\n{'='*170}")
-        print(f"{'Rank':<4} {'Model':<50} {'Type':<10} {'Legal':<8} {'win':<6} {'win_move':<8} {'lose':<6} {'lose_move':<8} {'parsing_err%':<12} {'illegal_mv%':<12} {'forbidden%':<12} {'success_mv%':<12} {'optimal_mv%':<12} ")
+        print(f"{'Rank':<4} {'Model':<50} {'Type':<10} {'Legal':<8} {'win':<6} {'win_move':<8} {'lose':<6} {'lose_move':<8} {'draw':<6} {'draw_move':<8}")
         print(f"{'='*170}")
         for i, (name, one_stats, rating) in enumerate(attempt_stats, 1):
             name_lst = name.split("_")
@@ -441,10 +548,8 @@ class EloCalculator:
             with_legal_moves = name_lst[-1]
             oneType = name_lst[-2]
             print(f"{i:<4} {model_name:<50} {oneType:<10} {with_legal_moves:<8} {one_stats['win_num']:<6.0f} {one_stats['win_avg_move']:<8.0f}  "
-                  f"{one_stats['lose_num']:<6.0f} {one_stats['lose_avg_move']:<8.0f}  "
-                  f"{one_stats['parsing_errors_pct']:<12.1f}  "
-                  f"{one_stats['illegal_moves_pct']:<12.1f} {one_stats['forbidden_thinking_pct']:<12.1f}  "
-                  f"{one_stats['successful_moves_pct']:<12.1f} {one_stats['optimal_moves_pct']:<12.1f}  ")
+                  f"{one_stats['lose_num']:<6.0f} {one_stats['lose_avg_move']:<8.0f} "
+                  f"{one_stats['draw_num']:<6.0f} {one_stats['draw_avg_move']:<8.0f}")
         print(f"{'='*170}")
 
     # Updated display methods in English
@@ -457,8 +562,10 @@ def main():
     #elo_calc.add_player('doubao-1-5-pro-32k-250115','blindfold')
     # Create comprehensive dashboard
     elo_calc.print_rankings()
-    elo_calc.print_attempt_stats()
+    #elo_calc.print_attempt_stats()
+    #print(elo_calc.termination_stats)
     elo_calc.save_ratings("./simulation_record/ratings.json")
+    #elo_calc.print_player_terminations()
 
 
 if __name__ == "__main__":

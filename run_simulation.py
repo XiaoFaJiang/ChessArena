@@ -606,7 +606,7 @@ def load_config(config_file):
     
     # Create player configs
     white_player = PlayerConfig(
-        name=config_data["white_player"]["name"],
+        name=config_data["white_player"]["name"] + "_" + config_data["white_player"]["play_mode"] + "_" + str(config_data["white_player"].get("provide_legal_moves", True)),
         api_key=config_data["white_player"].get("api_key", "dummy"),
         base_url=config_data["white_player"]["base_url"],
         model=config_data["white_player"]["model"],
@@ -614,13 +614,13 @@ def load_config(config_file):
         top_p=config_data["white_player"].get("top_p", 1.0),
         frequency_penalty=config_data["white_player"].get("frequency_penalty",0),
         max_tokens=config_data["white_player"].get("max_tokens", 500),
-        provide_legal_moves=config_data["white_player"].get("provide_legal_moves", False),
+        provide_legal_moves=config_data["white_player"].get("provide_legal_moves", True),
         provide_move_history=config_data["white_player"].get("provide_move_history", False),
         play_mode=config_data["white_player"].get("play_mode","blitz"),
     )
     
     black_player = PlayerConfig(
-        name=config_data["black_player"]["name"],
+        name=config_data["black_player"]["name"] + "_" + config_data["black_player"]["play_mode"] + "_" + str(config_data["black_player"].get("provide_legal_moves", True)),
         api_key=config_data["black_player"].get("api_key", "dummy"),
         base_url=config_data["black_player"]["base_url"],
         model=config_data["black_player"]["model"],
@@ -628,7 +628,7 @@ def load_config(config_file):
         top_p=config_data["black_player"].get("top_p", 1.0),
         frequency_penalty=config_data["black_player"].get("frequency_penalty",0),
         max_tokens=config_data["black_player"].get("max_tokens", 500),
-        provide_legal_moves=config_data["black_player"].get("provide_legal_moves", False),
+        provide_legal_moves=config_data["black_player"].get("provide_legal_moves", True),
         provide_move_history=config_data["black_player"].get("provide_move_history", False),
         play_mode=config_data["black_player"].get("play_mode","blitz"),
     )

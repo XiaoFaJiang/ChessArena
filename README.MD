@@ -1,6 +1,6 @@
 # ChessArena
 
-This is the code repo for ChessArena(https://arxiv.org/abs/2509.24239), containing four components: 1. chess competition sampling; 2. Glicko-1 ranking system; 3. three fine-grained evaluation tasks; 4. chess training.
+This is the submission code for ChessArena, containing four components: 1. chess competition sampling (match-making algorithm); 2. Glicko-1 rating system; 3. fine-grained evaluation; 4. chess training.
 
 ## Evaluation
 
@@ -18,8 +18,11 @@ python competition_sampling.py --games 4
 python competition_sampling.py \
     --target \
     --player1_id "gpt-4.1" \
-    --player1_name "gpt-4.1_blitz_True"
-```
+    --player1_name "gpt-4.1" \
+    --player1_play_mode "blitz" \
+    --player1_provide_legal_moves \
+    --player1_api_key "<your api key>" \
+    --player1_base_url "<your api url>" 
 
 Where `player1_id` is the model ID in OpenAI API format; `player1_name` can be set to any name, but must be followed by the model's play mode and whether legal moves are provided. Ensure that `player1_name` exists in `./simulation_record/ratings.json`.
 
@@ -76,14 +79,6 @@ We have saved example scripts in `./scripts` for your reference.
 
 All our training was completed on 8 H800 GPUs. SFT training takes about 4 hours; RL training takes about 60 hours.
 
-**Training Dataset**
-https://huggingface.co/datasets/ljcnju/ChessArena_Training_Dataset
-
-**Our trained models**
-SFT stage-2: https://huggingface.co/ljcnju/Qwen3-8B-Chess-SFT
-
-RL: https://huggingface.co/ljcnju/Qwen3-8B-Chess
-
 **Training Code**
 
 We have saved all our training code in the `./chess_train` folder: SFT-stage1, SFT-stage2 (LLamaFactory), and RL (Verl) training.
@@ -137,13 +132,3 @@ Our reward function is in `./chess_train/verl/verl/utils/reward_score/chess.py`.
 You can modify the reward_score yourself and conduct training.
 
 For specific usage of the Verl framework, you can refer to the official Verl documentation and GitHub (unrelated to this paper's authors): https://verl.readthedocs.io/en/latest/start/install.html and https://github.com/volcengine/verl
-
-# Citation
-```
-@article{liu2025chessarena,
-  title={ChessArena: A Chess Testbed for Evaluating Strategic Reasoning Capabilities of Large Language Models},
-  author={Liu, Jincheng and He, Sijun and Wu, Jingjing and Wang, Xiangsen and Chen, Yang and Kuang, Zhaoqi and Bao, Siqi and Yao, Yuan},
-  journal={arXiv preprint arXiv:2509.24239},
-  year={2025}
-}
-```

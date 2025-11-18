@@ -1,20 +1,20 @@
 {
     "white_player": {
-        "name": "deepseek-v3_bullet",
-        "api_key": "sk-va1zl4RPpU2XC43VnVfSB3marxgoTtyrUzcN5q7Pdtb9zAa5",
-        "base_url": "http://yy.dbh.baidu-int.com/v1",
+        "name": "deepseek-v3",
+        "api_key": "your key",
+        "base_url": "your url",
         "model": "deepseek-v3",
-        "max_tokens": 2048,
+        "max_tokens": 4096,
         "play_mode":"bullet",
         "provide_legal_moves": true,
         "provide_move_history": true
       },
     "black_player": {
-        "name": "doubao-1-5-pro-32k-250115_blitz",
-        "api_key": "sk-va1zl4RPpU2XC43VnVfSB3marxgoTtyrUzcN5q7Pdtb9zAa5",
-        "base_url": "http://yy.dbh.baidu-int.com/v1",
+        "name": "doubao-1-5-pro-32k-250115",
+        "api_key": "your key",
+        "base_url": "your url",
         "model": "doubao-1-5-pro-32k-250115",
-        "max_tokens": 2048,
+        "max_tokens": 4096,
         "provide_legal_moves": true,
         "provide_move_history": true
     },

@@ -4,6 +4,7 @@ __pycache__/
 *$py.class
 
 #Temp files and useless directories
+log/
 ablation_evaluation/
 config/
 grpo_train/

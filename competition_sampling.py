@@ -49,13 +49,14 @@ class ChessMatchSampling:
     
     def __init__(
         self,
+        args,
         ratings_file: str = "./simulation_record/ratings.json",
         provide_move_history: bool = True,
         max_moves: int = 200,
         max_retries: int = 5,
         stockfish_path: str = "./stockfish-8-linux/Linux/stockfish_8_x64",
-        api_key: str = "sk-va1zl4RPpU2XC43VnVfSB3marxgoTtyrUzcN5q7Pdtb9zAa5",
-        base_url: str = "http://yy.dbh.baidu-int.com/v1"
+        api_key: str = os.environ["OPENAI_API_KEY"], #your sk-key
+        base_url: str = os.environ["OPENAI_BASE_URL"], #your api address
     ):
         """
         初始化匹配采样器
@@ -74,21 +75,26 @@ class ChessMatchSampling:
         self.max_moves = max_moves
         self.max_retries = max_retries
         self.stockfish_path = stockfish_path
-        self.api_key = api_key
-        self.base_url = base_url
-        
+        self.args = args
+        self.player1_url = self.args.player1_base_url #base_url of player1
+        self.player1_api_key = self.args.player1_api_key #api_key of player1
+        self.player2_url = base_url #base_url of player2
+        self.player2_api_key = api_key #api_key of player2
         # 模型映射表
         self.model_map = {
             'doubao-1.5-lite': 'doubao-lite-1.5-32k',
-            'api_9': '<sandbox-2551571491>api9',
-            'api_9_code': '<sandbox-2551571491>api9_code',
-            'maia-1100': 'lc0'
+            'maia-1100': 'lc0',
+            #create your model_id map for your api call here
+            #key: model id in our chessArena competitions, value: model id in your api call
+            #you can see a model name in ./simulation_record/ratings.json
+            #for example: qwen3-235b-a22b_blitz_True in ratings.json
+            #the model id in our chessArena competitions is qwen3-235b-a22b
         }
         
         self.type_map = {
             'blindfold': 'blindfold_multiTurn'
         }
-        self.thinking_models = {'doubao-seed-1-6-thinking-250615','doubao-1-5-thinking-pro-250415','deepseek-r1',"gemini-2.5-pro-preview-06-05","gemini-2.5-pro"}
+        self.thinking_models = {'doubao-seed-1-6-thinking-250615','doubao-1-5-thinking-pro-250415','deepseek-r1',"gemini-2.5-pro-preview-06-05","gemini-2.5-pro","O3"}
         # 加载评分数据
         self._load_ratings(ratings_file)
         
@@ -252,7 +258,7 @@ class ChessMatchSampling:
         
         return _call_openai_api(model, url, "hello", api_key)
     
-    def _create_player_config(self, player_name: str, player_id: str) -> Tuple[Dict[str, Any], str]:
+    def _create_player_config(self, player_name: str, player_id: str, url: str, api_key: str) -> Tuple[Dict[str, Any], str]:
         """
         创建棋手配置
         
@@ -265,21 +271,20 @@ class ChessMatchSampling:
         parts = player_name.split("_")
         player_type = parts[-2]
         provide_legal_moves = True if parts[-1].lower() == "true" else False
-        url = self.base_url if "api_9" not in player_name else "http://10.214.54.151:8614/proxy/"
         model_id = self.model_map.get(player_id, player_id)
         
         config = {
             "name": player_name,
-            "api_key": self.api_key,
+            "api_key": api_key,
             "base_url": url,
             "model": model_id,
-            "max_tokens": 4096 if player_id not in self.thinking_models else 16384 ,
+            "max_tokens": 4096 if player_id not in self.thinking_models else 16384,
             "play_mode": self.type_map.get(player_type,player_type),
             "provide_legal_moves": provide_legal_moves,
             "provide_move_history": self.provide_move_history
         }
         
-        return config, url
+        return config
     
     def _execute_match(self, player1_id: str, player1_name: str, player2_id: str, player2_name:str, show_simulation_output: bool = True, save_log: bool = False) -> bool:
         """
@@ -306,8 +311,8 @@ class ChessMatchSampling:
         
         # 创建棋手配置
         try:
-            white_config, white_url = self._create_player_config(player1_name,player1_id)
-            black_config, black_url = self._create_player_config(player2_name,player2_id)
+            white_config = self._create_player_config(player1_name,player1_id,self.player1_url,self.player1_api_key)
+            black_config = self._create_player_config(player2_name,player2_id,self.player2_url,self.player2_api_key)
             
             # 测试模型可用性
             if not self._test_model_availability(white_url, white_config["model"], self.api_key):
@@ -532,14 +537,19 @@ def main():
     parser = argparse.ArgumentParser(description="Run chess simulations between LLMs")
     parser.add_argument("--target", default=False,action="store_true", help='if target sampling')
     parser.add_argument("--player1_id", type=str, default="gpt-4.1", help="first player model id(for openai client call)")
-    parser.add_argument("--player1_name", type=str, default="gpt-4.1_blitz_True", help="first player model name(for our chessArena ratings record),\
+    parser.add_argument("--player1_name", type=str, default="gpt-4.1", help="first player model name(for our chessArena ratings record),\
         need follow play mode and whether provide legal moves; player1_name must in our ratings.json")
+    parser.add_argument("--player1_play_mode",type=str,default="blitz")
+    parser.add_argument("--player1_provide_legal_moves",action="store_true")
+    parser.add_argument("--player1_api_key",type="str",default="dummy")
+    parser.add_argument("--player1_base_url",type="str",default="http://0.0.0.1:8000/v1/chat/completions")
     parser.add_argument("--games", type=int, default=2, help="Number of games to run") 
     args = parser.parse_args()
+    args.player1_name = f"{args.player1_name}_{args.player1_play_mode}_{str(args.player1_provide_legal_moves)}"
     for _ in range(args.games//2):
         try:
             # 初始化匹配采样器
-            sampler = ChessMatchSampling()
+            sampler = ChessMatchSampling(args)
             # 显示统计信息
             stats = sampler.get_player_stats()
             logger.info(f"系统统计: {stats}")
