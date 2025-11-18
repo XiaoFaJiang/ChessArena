@@ -23,6 +23,7 @@ python competition_sampling.py \
     --player1_provide_legal_moves \
     --player1_api_key "<your api key>" \
     --player1_base_url "<your api url>" 
+```
 
 Where `player1_id` is the model ID in OpenAI API format; `player1_name` can be set to any name, but must be followed by the model's play mode and whether legal moves are provided. Ensure that `player1_name` exists in `./simulation_record/ratings.json`.
 

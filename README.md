@@ -22,7 +22,7 @@ ChessArena is a comprehensive framework for evaluating and enhancing strategic r
 ### Installation
 
 ```bash
-git clone https://github.com/your-username/ChessArena.git
+git clone https://github.com/NEU-CS/ChessArena.git
 cd ChessArena
 pip install -r requirements.txt
 ```
@@ -42,10 +42,14 @@ This randomly selects the first player and uses our competition sampling algorit
 python competition_sampling.py \
     --target \
     --player1_id "gpt-4.1" \
-    --player1_name "gpt-4.1_blitz_True"
+    --player1_name "gpt-4.1" \
+    --player1_play_mode "blitz" \
+    --player1_provide_legal_moves \
+    --player1_api_key "<your api key>" \
+    --player1_base_url "<your api url>" 
 ```
 
-Where player1_id is the model ID in OpenAI API format; player1_name can be set to any name, but must be followed by the model's play mode and whether legal moves are provided. 
+Where `player1_id` is the model ID in OpenAI API format; `player1_name` can be set to any name, but must be followed by the model's play mode and whether legal moves are provided. Ensure that `player1_name` exists in `./simulation_record/ratings.json`.
 
 **Ensure** that player1_name exists in ./simulation_record/ratings.json. 
 

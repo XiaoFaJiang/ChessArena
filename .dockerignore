@@ -13,6 +13,7 @@ trash/
 simulation_data_catch/
 chess_simulation.log
 arenalinux_64bit_3.9beta.tar.gz
+*.tar.gz
 test.py
 .sh
 call.py
