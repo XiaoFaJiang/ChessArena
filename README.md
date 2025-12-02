@@ -4,6 +4,7 @@
 [![Hugging Face Dataset](https://img.shields.io/badge/🤗-Dataset-yellow.svg)](https://huggingface.co/datasets/ljcnju/ChessArena_Training_Dataset)
 [![Hugging Face Models](https://img.shields.io/badge/🤗-Models-yellow.svg)](https://huggingface.co/ljcnju/Qwen3-8B-Chess-SFT)
 [![Hugging Face Models](https://img.shields.io/badge/🤗-Models-yellow.svg)](https://huggingface.co/ljcnju/Qwen3-8B-Chess)
+[![GitHub Page](https://img.shields.io/badge/📱-GitHub_Page-181717.svg?logo=github)](https://xiaofajiang.github.io/ChessArena_github_page/)
 
 
 > *Official repository for ChessArena: A Chess Testbed for Evaluating Strategic Reasoning Capabilities of Large Language Models*
@@ -18,6 +19,41 @@ ChessArena is a comprehensive framework for evaluating and enhancing strategic r
 4. **🏋️ Chess Training** - Full training pipeline for chess reasoning
 
 ## 🚀 Quick Start
+
+### Docker Image
+The Docker image, packaged as a $\text{tar.gz}$ archive, is available for download via the provided anonymous URL. To access and run the environment, please follow the steps below:
+
+1.  **Download the Archive:**
+    The $\text{tar.gz}$ archive of the Docker image can be obtained using the following link:
+    (URL: https://drive.google.com/file/d/1XAcoc4_Ij65cK6ICBgBZv7nwNbNes6fp/view?usp=drive_link)
+
+2.  **Decompress the Archive:**
+    Decompress the downloaded $\text{tar.gz}$ file to obtain the `.tar` image file:
+    ```bash
+    gunzip chessarena_for_rebuttal.tar.gz
+    ```
+
+3.  **Import the Docker Image:**
+    Load the Docker image into your local Docker environment using the resulting `.tar` file:
+    ```bash
+    docker load -i chessarena_for_rebuttal.tar
+    ```
+
+4.  **Run the Container:**
+    Execute the Docker image. Upon startup, the container will automatically initiate the ELO rating calculation and display the results:
+    ```bash
+    docker run -it --rm chessarena:v0.1
+    ```
+
+Alternatively, you may enter the container to examine the files (including all match history log files) using:
+
+```bash
+docker run -it --rm chessarena /bin/bash
+```
+
+All simulation record logs are specifically located in the \`./simulation\_record/\` folder within the container.
+
+We will also draft a short leaderboard policy (including submission format and guidelines for anti-overfitting checks) to facilitate community adoption and fair competition.
 
 ### Installation
 
