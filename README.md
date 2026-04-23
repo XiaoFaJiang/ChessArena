@@ -9,7 +9,7 @@
 
 > *Official repository for ChessArena: A Chess Testbed for Evaluating Strategic Reasoning Capabilities of Large Language Models*
 
-**ChessArena has been accepted by [ACL 2026](https://2026.aclweb.org/)** 🎉
+🎉 **ChessArena has been accepted by [ACL 2026](https://2026.aclweb.org/) as a main conference paper!**
 ## 📖 Overview
 
 ChessArena is a comprehensive framework for evaluating and enhancing strategic reasoning capabilities in Large Language Models through chess. This repository contains four key components:
