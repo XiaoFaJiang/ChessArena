@@ -13,29 +13,41 @@ import random
 from chess_engine import lc0_engine
 import chess
 
-def setup_logger(model_name, rating, log_level=logging.INFO):
+def load_jsonl(path, limit=None):
+    """加载 jsonl 文件，可选限制条目数"""
+    data = []
+    with open(path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                data.append(json.loads(line))
+            if limit and len(data) >= limit:
+                break
+    return data
+
+def setup_logger(model_name, rating, with_legal_move, log_level=logging.INFO):
     """设置主logger和文件日志"""
     # 创建主logger
     logger = logging.getLogger(f"PuzzleEval_{model_name}_{rating}")
     logger.setLevel(log_level)
-    
+
     # 避免重复添加handler
     if logger.handlers:
         return logger
-    
+
     # 创建格式化器
     formatter = logging.Formatter(
         '%(asctime)s - %(name)s - %(levelname)s - [%(threadName)s] - %(message)s'
     )
-    
+
     # 控制台处理器
     console_handler = logging.StreamHandler()
     console_handler.setLevel(log_level)
     console_handler.setFormatter(formatter)
     logger.addHandler(console_handler)
-    
+
     # 文件处理器
-    log_dir = f"./ablation_evaluation/puzzles_by_rating/lite/evaluation_results/provide_legal_move{args.with_legal_move}/{model_name}/{rating}_{rating+400}/logs"
+    log_dir = f"./fine-grained_evaluation/puzzles_by_rating/lite/evaluation_results/provide_legal_move{with_legal_move}/{model_name}/{rating}_{rating+400}/logs"
     os.makedirs(log_dir, exist_ok=True)
     
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -49,54 +61,52 @@ def setup_logger(model_name, rating, log_level=logging.INFO):
     logger.info(f"Logger initialized. Log file: {log_file}")
     return logger
 
-def collect_response_from_gpt(question_list,args):
+def _build_messages(question, args, i, question_list):
+    """根据任务配置构建 messages"""
+    if args.task == "board_reconstruction":
+        return question["messages"]
+
+    if args.play_mode == "blindfold":
+        return question["messages_with_legal_moves" if args.with_legal_move else "messages_with_out_legal_moves"]
+
+    # 非 blindfold 模式
+    if args.task == "move_choosing":
+        prompt_key_map = {
+            (True, True): "prompt_pgn",
+            (True, False): "prompt_without_move_histroy",
+            (False, True): "prompt_without_legal_moves_pgn",
+            (False, False): "prompt_without_legal_moves_without_move_histroy",
+        }
+        prompt = question[prompt_key_map[(args.with_legal_move, args.with_move_history)]]
+    else:
+        prompt = question["prompt"]
+
+    return [
+        {'role': 'system', 'content': question_list[i]["system"]},
+        {'role': 'user', 'content': prompt}
+    ]
+
+def collect_response_from_gpt(question_list, args):
     '''
-    :param db_path: str
     :param question_list: []
-    :return: dict of responses collected from openai
+    :return: list of (plain_result, messages) tuples
     '''
     count = 0
-    def call_api_once(i,question):
+    total = len(question_list)
+
+    def call_api_once(i, question):
         nonlocal count
-        if args.task == "board_reconstruction":
-            messages = question["messages"]
-        else:
-            if args.play_mode == "blindfold":
-                if args.with_legal_move:
-                    messages = question["messages_with_legal_moves"]
-                else:
-                    messages = question["messages_with_out_legal_moves"]
-            else:
-                prompt = question["prompt"]
-                if args.task == "move_choosing":
-                    if args.play_mode != "blindfold":
-                        if args.with_legal_move and args.with_move_history:
-                            prompt = question["prompt_pgn"]
-                        elif args.with_legal_move and not args.with_move_history:
-                            prompt = question["prompt_without_move_histroy"]
-                        elif not args.with_legal_move and args.with_move_history:
-                            prompt = question["prompt_without_legal_moves_pgn"]
-                        else:
-                            prompt = question["prompt_without_legal_moves_without_move_histroy"]
-                    else:
-                        if args.with_legal_move:
-                            prompt = question["prompt"]
-                        else:
-                            prompt = question["prompt_without_legal_moves"]
-                    
-                messages = [
-                        {'role':'system','content':question_list[i]["system"]},
-                        {'role':'user','content':prompt}
-                ]
+        messages = _build_messages(question, args, i, question_list)
+
         if "random" in args.model_name:
             uci_move = generate_random_move(question_list[i]["legal_moves"])
             plain_result = f"""
 ```
 {uci_move}
 ```
-"""         
+"""
         elif "maia" in args.model_name:
-            board = chess.Board(fen = question_list[i]["fen"].strip())
+            board = chess.Board(fen=question_list[i]["fen"].strip())
             uci_move = engine.predict_move(board)
             plain_result = f"""
 ```
@@ -104,17 +114,18 @@ def collect_response_from_gpt(question_list,args):
 ```
 """
         else:
-            plain_result = connect_gpt(model=args.model_id, url=args.url, messages=messages, max_tokens=args.max_tokens, temperature=args.temperature, top_p=args.top_p, api_key=args.api_key,enable_thinking=args.enable_thinking)
-        #print("the response is: \n",plain_result,"\n")
+            plain_result = connect_gpt(
+                model=args.model_id, url=args.url, messages=messages,
+                max_tokens=args.max_tokens, temperature=args.temperature,
+                top_p=args.top_p, api_key=args.api_key, enable_thinking=args.enable_thinking
+            )
+
         count += 1
-        
-        print(f"processing:{count}/{len(question_list)}")
-        return plain_result,messages
-    
-    response_list = []
+        print(f"processing:{count}/{total}")
+        return plain_result, messages
+
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.concurrency) as executor:
-        # 使用 tqdm 显示进度
-        response_list = list(executor.map(call_api_once, range(len(question_list)), question_list))
+        response_list = list(executor.map(call_api_once, range(total), question_list))
 
     return response_list
 
@@ -158,7 +169,7 @@ def move_choose_metric(question_list,response_list,args):
                     
         move_winrate = 0
         move_with_winrate = v["move_with_winrate"]
-        for i,v2 in enumerate(move_with_winrate):
+        for j,v2 in enumerate(move_with_winrate):
             if v2[0] == now_move:
                 move_winrate = v2[1]
                 break
@@ -176,60 +187,56 @@ def move_choose_metric(question_list,response_list,args):
     return result,final_metrics
 
 def eval_move_choose(args):
-    if not args.only_compute_metric:
-        question_list = []
-        with open(f"./ablation_evaluation/move_choose_evaluation/{args.play_mode}_legal_evaluation.jsonl","r") as f:
-            for line in f.readlines():
-                question_list.append(json.loads(line))
-        question_list = question_list[:args.eval_nums]
-        if os.path.exists(f"./ablation_evaluation/move_choose_evaluation/{args.play_mode}/{args.model_name}_final_metrics_{args.with_legal_move}_{args.eval_nums}.json"):
-            print("already exists.")
-            print(f"./ablation_evaluation/move_choose_evaluation/{args.play_mode}/{args.model_name}_final_metrics_{args.with_legal_move}_{args.eval_nums}.json")
-            print("return")
-            return 
-        response_list = collect_response_from_gpt(question_list,args)
-    else:
-        question_list = []
-        with open(f"./ablation_evaluation/move_choose_evaluation/{args.play_mode}_legal_evaluation.jsonl","r") as f:
-            for line in f.readlines():
-                question_list.append(json.loads(line))
-        fen_index_map = {}
-        for i,v in enumerate(question_list):
-            fen_index_map[v["fen"]] = v
-            
-        response_list = []
-        with open(f"./ablation_evaluation/move_choose_evaluation/{args.play_mode}/{args.model_name}_prediction_{args.with_legal_move}_{args.eval_nums}.jsonl") as f:
-            for line in f.readlines():
-                response_list.append(json.loads(line))
-        #根据response_list中的fen读取到question_list中的fen，然后再做判断
-        if args.play_mode == "blindfold":
-            response_list = [[v["response"],v["messages"]] for v in response_list]
-            question_list = question_list[:len(response_list)]
+    try:
+        if not args.only_compute_metric:
+            question_list = load_jsonl(f"./fine-grained_evaluation/move_choose_evaluation/{args.play_mode}_legal_evaluation.jsonl", limit=args.eval_nums)
+            if os.path.exists(f"./fine-grained_evaluation/move_choose_evaluation/{args.play_mode}/{args.model_name}_final_metrics_{args.with_legal_move}_{args.eval_nums}.json"):
+                print("already exists.")
+                print(f"./fine-grained_evaluation/move_choose_evaluation/{args.play_mode}/{args.model_name}_final_metrics_{args.with_legal_move}_{args.eval_nums}.json")
+                print("return")
+                return
+            response_list = collect_response_from_gpt(question_list,args)
         else:
-            real_question_list = []
-            for i,v in enumerate(response_list):
-                fen = parse_fen_from_user_prompt(v["prompt"])
-                item = fen_index_map[fen]
-                assert v["legal_moves"] == item["legal_moves"]
-                real_question_list.append(item)
-            
-            question_list = real_question_list[:]
-            response_list = [v["response"] for v in response_list]
-            assert len(question_list) == len(response_list)
-    
-    
-    result,final_metrics = move_choose_metric(question_list,response_list,args)
-    
-    print(final_metrics)
-    with open(f"./ablation_evaluation/move_choose_evaluation/{args.play_mode}/{args.model_name}_final_metrics_{args.with_legal_move}_{args.eval_nums}.json","w") as f:
-        json.dump(final_metrics,f,indent = 2)
-        
-    with open(f"./ablation_evaluation/move_choose_evaluation/{args.play_mode}/{args.model_name}_prediction2_{args.with_legal_move}_{args.eval_nums}.jsonl","w") as f:
-        for line in result:
-            f.write(json.dumps(line) + "\n")
-    
-    if engine:
-        engine.quit_engine()
+            question_list = load_jsonl(f"./fine-grained_evaluation/move_choose_evaluation/{args.play_mode}_legal_evaluation.jsonl")
+            fen_index_map = {}
+            for i,v in enumerate(question_list):
+                fen_index_map[v["fen"]] = v
+
+            response_list = []
+            with open(f"./fine-grained_evaluation/move_choose_evaluation/{args.play_mode}/{args.model_name}_prediction_{args.with_legal_move}_{args.eval_nums}.jsonl") as f:
+                for line in f:
+                    line = line.strip()
+                    if line:
+                        response_list.append(json.loads(line))
+            #根据response_list中的fen读取到question_list中的fen，然后再做判断
+            if args.play_mode == "blindfold":
+                response_list = [[v["response"],v["messages"]] for v in response_list]
+                question_list = question_list[:len(response_list)]
+            else:
+                real_question_list = []
+                for i,v in enumerate(response_list):
+                    fen = parse_fen_from_user_prompt(v["prompt"])
+                    item = fen_index_map[fen]
+                    assert v["legal_moves"] == item["legal_moves"]
+                    real_question_list.append(item)
+
+                question_list = real_question_list[:]
+                response_list = [v["response"] for v in response_list]
+                assert len(question_list) == len(response_list)
+
+
+        result,final_metrics = move_choose_metric(question_list,response_list,args)
+
+        print(final_metrics)
+        with open(f"./fine-grained_evaluation/move_choose_evaluation/{args.play_mode}/{args.model_name}_final_metrics_{args.with_legal_move}_{args.eval_nums}.json","w") as f:
+            json.dump(final_metrics,f,indent = 2)
+
+        with open(f"./fine-grained_evaluation/move_choose_evaluation/{args.play_mode}/{args.model_name}_prediction2_{args.with_legal_move}_{args.eval_nums}.jsonl","w") as f:
+            for line in result:
+                f.write(json.dumps(line) + "\n")
+    finally:
+        if engine:
+            engine.quit_engine()
     
 def chess_modeling_metric(question_list,response_list):
     piece_match_num = 0
@@ -249,8 +256,8 @@ def chess_modeling_metric(question_list,response_list):
         r['pred_legal_moves'] = pred_legal_moves if pred_legal_moves else []
         r['gt_legal_moves'] = v['ground_truth']['legal_moves'] if pred_legal_moves else []
         if r['pred_legal_moves'] and r['pred_legal_moves'] != "unknown":
-            for i,m in enumerate(r['pred_legal_moves']):
-                r['pred_legal_moves'][i] = san_to_uci(m,v['fen'])
+            for j,m in enumerate(r['pred_legal_moves']):
+                r['pred_legal_moves'][j] = san_to_uci(m,v['fen'])
                 
         if  r['pred_piece'] == r['gt_piece']:
             piece_match_num += 1
@@ -274,32 +281,27 @@ def chess_modeling_metric(question_list,response_list):
 def eval_chess_modeling(args):
     args.play_mode = 'bullet'
     if not args.only_compute_metric:
-        question_list = []
-        with open("./ablation_evaluation/chess_modeling_evaluation/chess_modeling_evaluation.jsonl","r") as f:
-            for line in f.readlines():
-                question_list.append(json.loads(line))
-        question_list = question_list[:args.eval_nums]
+        question_list = load_jsonl("./fine-grained_evaluation/chess_modeling_evaluation/chess_modeling_evaluation.jsonl", limit=args.eval_nums)
         args.with_legal_move = True
-        if os.path.exists(f"./ablation_evaluation/chess_modeling_evaluation/{args.model_name}_final_metrics_{args.eval_nums}.json"):
+        if os.path.exists(f"./fine-grained_evaluation/chess_modeling_evaluation/{args.model_name}_final_metrics_{args.eval_nums}.json"):
             return 
         response_list = collect_response_from_gpt(question_list,args)
     else:
-        question_list = []
-        with open("./ablation_evaluation/chess_modeling_evaluation/chess_modeling_evaluation.jsonl","r") as f:
-            for line in f.readlines():
-                question_list.append(json.loads(line))
+        question_list = load_jsonl("./fine-grained_evaluation/chess_modeling_evaluation/chess_modeling_evaluation.jsonl")
         response_list = []
-        with open(f"./ablation_evaluation/chess_modeling_evaluation/{args.model_name}_predictions_{args.eval_nums}.jsonl") as f:
-            for line in f.readlines():
-                response_list.append(json.loads(line)["response"])
+        with open(f"./fine-grained_evaluation/chess_modeling_evaluation/{args.model_name}_predictions_{args.eval_nums}.jsonl") as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    response_list.append(json.loads(line)["response"])
         args.eval_nums = len(response_list)
         question_list = question_list[:args.eval_nums]
         
     final_metrics,result = chess_modeling_metric(question_list,response_list)
     print(final_metrics)
-    with open(f"./ablation_evaluation/chess_modeling_evaluation/{args.model_name}_final_metrics_{args.eval_nums}.json","w") as f:
+    with open(f"./fine-grained_evaluation/chess_modeling_evaluation/{args.model_name}_final_metrics_{args.eval_nums}.json","w") as f:
         json.dump(final_metrics,f,indent=2)
-    with open(f"./ablation_evaluation/chess_modeling_evaluation/{args.model_name}_predictions_{args.eval_nums}.jsonl","w") as f:
+    with open(f"./fine-grained_evaluation/chess_modeling_evaluation/{args.model_name}_predictions_{args.eval_nums}.jsonl","w") as f:
         for line in result:
             f.write(json.dumps(line) + "\n")
 
@@ -311,64 +313,64 @@ def eval_single_puzzle(puzzle_data, args, main_logger):
         args.max_tokens, args.enable_thinking, args.is_san,
         args.max_retry, args.play_mode, args.with_legal_move
     )
-    agent.set_up_board(fen)
-    agent.push_move(puzzle_data["Moves"][0])
-    if "stockfish" in args.model_id:
-        agent.set_up_stockfish_depth(args.stockfish_depth)
-    ground_truth_moves = puzzle_data["Moves"]
-    puzzle_id = puzzle_data["PuzzleId"]
-    puzzle_logger = logging.getLogger(f"Puzzle_{puzzle_id}")
-    puzzle_logger.setLevel(main_logger.level)
+    try:
+        agent.set_up_board(fen)
+        agent.push_move(puzzle_data["Moves"][0])
+        if "stockfish" in args.model_id:
+            agent.set_up_stockfish_depth(args.stockfish_depth)
+        ground_truth_moves = puzzle_data["Moves"]
+        puzzle_id = puzzle_data["PuzzleId"]
+        puzzle_logger = logging.getLogger(f"Puzzle_{puzzle_id}")
+        puzzle_logger.setLevel(main_logger.level)
 
-    puzzle_logger.parent = main_logger
-    puzzle_logger.propagate = True
-    
-    print(f"Evaluating Puzzle {puzzle_id}...")
-    
-    #puzzle main loop
-    #excatly match the moves in the puzzle
-    success = True
-    for index in range(1, len(ground_truth_moves), 2):
-        move = agent.step()
-        if not move:
-            puzzle_logger.error(f"Puzzle {puzzle_id} Failed: No move found in model's response.")
-            success = False
-            break
-        
-        if move == ground_truth_moves[index]:
-            if index + 1 < len(ground_truth_moves):
-                agent.push_opponent_move(ground_truth_moves[index+1])
-        else:
-            if agent.board.is_checkmate():
-                puzzle_logger.info(f"Puzzle {puzzle_id} Checkmate")
+        puzzle_logger.parent = main_logger
+        puzzle_logger.propagate = True
+
+        print(f"Evaluating Puzzle {puzzle_id}...")
+
+        #puzzle main loop
+        #excatly match the moves in the puzzle
+        success = True
+        for index in range(1, len(ground_truth_moves), 2):
+            move = agent.step()
+            if not move:
+                puzzle_logger.error(f"Puzzle {puzzle_id} Failed: No move found in model's response.")
+                success = False
                 break
-            puzzle_logger.error(f"Puzzle {puzzle_id} Failed: Move {move} wrong, ground truth is {ground_truth_moves[index]}")
-            success = False
-            break
-        
-    if success:
-        puzzle_logger.info(f"Puzzle {puzzle_id} Solved")
-    
-    model_path = f"./ablation_evaluation/puzzles_by_rating/lite/evaluation_results/provide_legal_move{args.with_legal_move}/{args.model_name}/{args.rating}_{args.rating+400}/generation"
-    if not os.path.exists(model_path):
+
+            if move == ground_truth_moves[index]:
+                if index + 1 < len(ground_truth_moves):
+                    agent.push_opponent_move(ground_truth_moves[index+1])
+            else:
+                if agent.board.is_checkmate():
+                    puzzle_logger.info(f"Puzzle {puzzle_id} Checkmate")
+                    break
+                puzzle_logger.error(f"Puzzle {puzzle_id} Failed: Move {move} wrong, ground truth is {ground_truth_moves[index]}")
+                success = False
+                break
+
+        if success:
+            puzzle_logger.info(f"Puzzle {puzzle_id} Solved")
+
+        model_path = f"./fine-grained_evaluation/puzzles_by_rating/lite/evaluation_results/provide_legal_move{args.with_legal_move}/{args.model_name}/{args.rating}_{args.rating+400}/generation"
         os.makedirs(model_path, exist_ok=True)
-    agent.record_messages_and_response(f"{model_path}/puzzles_{puzzle_id}_san({args.is_san}_sccuess({success})).json")
-    agent.clear_messages()
-    agent.quit_engine()
-    return success
+        agent.record_messages_and_response(f"{model_path}/puzzles_{puzzle_id}_san({args.is_san}_sccuess({success})).json")
+        agent.clear_messages()
+        return success
+    finally:
+        agent.quit_engine()
 
 def eval_puzzle_accuracy(args):
     # Load data
-    with open(f"./ablation_evaluation/puzzles_by_rating/lite/puzzles_{args.rating}_{args.rating+400}.jsonl") as f:
-        data = [json.loads(line) for line in f.readlines()][:args.eval_nums]
-    if os.path.exists(f"./ablation_evaluation/puzzles_by_rating/lite/evaluation_results/provide_legal_move{args.with_legal_move}/{args.model_name}/{args.rating}_{args.rating+400}/final_metrics_issan({args.is_san}).json") or \
-        os.path.exists(f"./ablation_evaluation/puzzles_by_rating/lite/evaluation_results/provide_legal_move{args.with_legal_move}/{args.model_name}/{args.rating}_{args.rating+400}/final_metrics_issan({args.is_san}).json.json"):
+    data = load_jsonl(f"./fine-grained_evaluation/puzzles_by_rating/lite/puzzles_{args.rating}_{args.rating+400}.jsonl", limit=args.eval_nums)
+    if os.path.exists(f"./fine-grained_evaluation/puzzles_by_rating/lite/evaluation_results/provide_legal_move{args.with_legal_move}/{args.model_name}/{args.rating}_{args.rating+400}/final_metrics_issan({args.is_san}).json") or \
+        os.path.exists(f"./fine-grained_evaluation/puzzles_by_rating/lite/evaluation_results/provide_legal_move{args.with_legal_move}/{args.model_name}/{args.rating}_{args.rating+400}/final_metrics_issan({args.is_san}).json.json"):
             return 
-    main_logger = setup_logger(args.model_name, args.rating)
+    main_logger = setup_logger(args.model_name, args.rating, args.with_legal_move)
     main_logger.info("Starting concurrent puzzle evaluation...")
     
     # find puzzles that have been evaluated
-    model_path = f"./ablation_evaluation/puzzles_by_rating/lite/evaluation_results/provide_legal_move{args.with_legal_move}/{args.model_name}/{args.rating}_{args.rating+400}/generation"
+    model_path = f"./fine-grained_evaluation/puzzles_by_rating/lite/evaluation_results/provide_legal_move{args.with_legal_move}/{args.model_name}/{args.rating}_{args.rating+400}/generation"
     evaluated_puzzles = set()
     if os.path.exists(model_path):
         for file in os.listdir(model_path):
@@ -381,18 +383,22 @@ def eval_puzzle_accuracy(args):
             executor.submit(eval_single_puzzle, puzzle, args, main_logger)
             for puzzle in data
         ]
-        right_count = sum(future.result() for future in futures)
-    accuracy = right_count / len(data)
-    with open(f"./ablation_evaluation/puzzles_by_rating/lite/evaluation_results/provide_legal_move{args.with_legal_move}/{args.model_name}/{args.rating}_{args.rating+400}/final_metrics_issan({args.is_san}).json","w") as f:
+        right_count = 0
+        for future in futures:
+            try:
+                right_count += future.result()
+            except Exception as e:
+                main_logger.error(f"Puzzle evaluation failed: {e}")
+    accuracy = right_count / len(data) if data else 0.0
+    with open(f"./fine-grained_evaluation/puzzles_by_rating/lite/evaluation_results/provide_legal_move{args.with_legal_move}/{args.model_name}/{args.rating}_{args.rating+400}/final_metrics_issan({args.is_san}).json","w") as f:
         json.dump({"accuracy":accuracy,"right_count":right_count},f,indent=4)
     main_logger.info(f"\nFinal Accuracy: {accuracy:.2%} ({right_count}/{len(data)})")
     return accuracy
         
 def eval_board_reconstruction(args):
-    with open(f"./ablation_evaluation/board_reconstruction/blindfold_board_reconstruction.jsonl") as f:
-        question_list = [json.loads(line) for line in f.readlines()][:args.eval_nums]
-    if os.path.exists(f"./ablation_evaluation/board_reconstruction/evaluation_results/{args.model_name}/final_metrics_issan({args.is_san}).json") or \
-        os.path.exists(f"./ablation_evaluation/board_reconstruction/evaluation_results/{args.model_name}/final_metrics_issan({args.is_san}).json.json"):
+    question_list = load_jsonl(f"./fine-grained_evaluation/board_reconstruction/blindfold_board_reconstruction.jsonl", limit=args.eval_nums)
+    if os.path.exists(f"./fine-grained_evaluation/board_reconstruction/evaluation_results/{args.model_name}/final_metrics_issan({args.is_san}).json") or \
+        os.path.exists(f"./fine-grained_evaluation/board_reconstruction/evaluation_results/{args.model_name}/final_metrics_issan({args.is_san}).json.json"):
             return 
     response_list = collect_response_from_gpt(question_list,args)
     successful_cnt = 0
@@ -404,9 +410,9 @@ def eval_board_reconstruction(args):
         item = {}
         item['fen'] = v1['fen']
         item['response'] = v2[0]
-        item['model_fen'] = extract_fen(v2[0])
+        item['model_fen'] = extract_fen(v2[0]).strip()
         item["success"] = False
-        if v1["fen"] == extract_fen(v2[0]):
+        if v1["fen"].strip() == extract_fen(v2[0]):
             item["success"] = True
             successful_cnt += 1
             successful_turn.append(len(v1["messages"]))
@@ -415,32 +421,31 @@ def eval_board_reconstruction(args):
         total_cnt += 1
         write_items.append(item)
     accuracy = successful_cnt / total_cnt
-    if not os.path.exists(f"./ablation_evaluation/board_reconstruction/evaluation_results/{args.model_name}"):
-        os.mkdir(f"./ablation_evaluation/board_reconstruction/evaluation_results/{args.model_name}")
+    os.makedirs(f"./fine-grained_evaluation/board_reconstruction/evaluation_results/{args.model_name}", exist_ok=True)
     print({"accuracy":accuracy,"successful_cnt":successful_cnt,"total_cnt":total_cnt,"successful_turn":successful_turn,"failed_turn":failed_turn})
-    with open(f"./ablation_evaluation/board_reconstruction/evaluation_results/{args.model_name}/final_metrics_issan({args.is_san}).json","w") as f:
+    with open(f"./fine-grained_evaluation/board_reconstruction/evaluation_results/{args.model_name}/final_metrics_issan({args.is_san}).json","w") as f:
         json.dump({"accuracy":accuracy,"successful_cnt":successful_cnt,"total_cnt":total_cnt,"successful_turn":successful_turn,"failed_turn":failed_turn},f,indent =4 )
     
-    with open(f"./ablation_evaluation/board_reconstruction/evaluation_results/{args.model_name}/generation_({args.is_san}).json","w") as f:
+    with open(f"./fine-grained_evaluation/board_reconstruction/evaluation_results/{args.model_name}/generation_({args.is_san}).json","w") as f:
         for line in write_items:
             f.write(json.dumps(line) + "\n")
 
 
 if __name__ == '__main__':
     args_parser = argparse.ArgumentParser()
-    args_parser.add_argument('--max_tokens', type=int,default=2048)
-    args_parser.add_argument("--eval_nums", type=int, default=200)
+    args_parser.add_argument('--max_tokens', type=int,default=8192)
+    args_parser.add_argument("--eval_nums", type=int, default=100)
     args_parser.add_argument('--temperature', type=float,default=0.2)
     args_parser.add_argument('--top_p',type=float,default=1.0)
     args_parser.add_argument('--api_key', type=str,default="")
-    args_parser.add_argument('--model_id', type=str,default="deepseek-v3")
-    args_parser.add_argument('--model_name', type=str,default="deepseek-v3")
-    args_parser.add_argument('--url', type=str,default="")
+    args_parser.add_argument('--model_id', type=str,default="doubao-seed-1-6-251015")
+    args_parser.add_argument('--model_name', type=str,default="doubao-seed-1-6-251015")
+    args_parser.add_argument('--url', type=str,default="https://ark.cn-beijing.volces.com/api/v3")
     args_parser.add_argument('--enable_thinking',action="store_true",default=False)
     args_parser.add_argument('--concurrency',type=int,default=20)
     args_parser.add_argument('--with_legal_move',action="store_true",default=False)
     args_parser.add_argument('--with_move_history',action="store_true",default=False)
-    args_parser.add_argument('--task',type=str,default="puzzle")
+    args_parser.add_argument('--task',type=str,default="board_reconstruction")
     args_parser.add_argument('--only_compute_metric',action="store_true",default=False)
     args_parser.add_argument('--parse_any_move',action="store_true",default=False)
     args_parser.add_argument('--rating',type=int,default=200)
