@@ -46,25 +46,25 @@ class ChessMatchSampling:
     MAX_EXPECTED_SCORE = 0.999
     DEFAULT_MAX_RETRIES = 3
     API_RETRY_DELAY = 20  # 秒
+
+    @staticmethod
+    def _extract_player_id(player_name: str) -> str:
+        return "_".join(player_name.split("_")[:-2])
+
+    @staticmethod
+    def _extract_player_type(player_name: str) -> str:
+        return player_name.split("_")[-2]
     
     def __init__(
         self,
-<<<<<<< HEAD
-        args,
-=======
->>>>>>> 2234950ffc591cf1d0cb103a0ccc306dd83021e1
+        args: Optional[argparse.Namespace] = None,
         ratings_file: str = "./simulation_record/ratings.json",
         provide_move_history: bool = True,
         max_moves: int = 200,
         max_retries: int = 5,
         stockfish_path: str = "./stockfish-8-linux/Linux/stockfish_8_x64",
-<<<<<<< HEAD
-        api_key: str = os.environ["OPENAI_API_KEY"], #your sk-key
-        base_url: str = os.environ["OPENAI_BASE_URL"], #your api address
-=======
-        api_key: str = "your api key",
-        base_url: str = "your url"
->>>>>>> 2234950ffc591cf1d0cb103a0ccc306dd83021e1
+        api_key: Optional[str] = None,
+        base_url: Optional[str] = None,
     ):
         """
         初始化匹配采样器
@@ -83,12 +83,18 @@ class ChessMatchSampling:
         self.max_moves = max_moves
         self.max_retries = max_retries
         self.stockfish_path = stockfish_path
-<<<<<<< HEAD
         self.args = args
-        self.player1_url = self.args.player1_base_url #base_url of player1
-        self.player1_api_key = self.args.player1_api_key #api_key of player1
-        self.player2_url = base_url #base_url of player2
-        self.player2_api_key = api_key #api_key of player2
+
+        self.player2_url = base_url or os.environ.get("OPENAI_BASE_URL", "your url")
+        self.player2_api_key = api_key or os.environ.get("OPENAI_API_KEY", "your api key")
+
+        if args is not None and getattr(args, "target", False):
+            self.player1_url = args.player1_base_url
+            self.player1_api_key = args.player1_api_key
+        else:
+            self.player1_url = self.player2_url
+            self.player1_api_key = self.player2_api_key
+
         # 模型映射表
         self.model_map = {
             'doubao-1.5-lite': 'doubao-lite-1.5-32k',
@@ -98,25 +104,12 @@ class ChessMatchSampling:
             #you can see a model name in ./simulation_record/ratings.json
             #for example: qwen3-235b-a22b_blitz_True in ratings.json
             #the model id in our chessArena competitions is qwen3-235b-a22b
-=======
-        self.api_key = api_key
-        self.base_url = base_url
-        
-        # 模型映射表
-        self.model_map = {
-            'doubao-1.5-lite': 'doubao-lite-1.5-32k',
-            'maia-1100': 'lc0'
->>>>>>> 2234950ffc591cf1d0cb103a0ccc306dd83021e1
         }
         
         self.type_map = {
             'blindfold': 'blindfold_multiTurn'
         }
-<<<<<<< HEAD
         self.thinking_models = {'doubao-seed-1-6-thinking-250615','doubao-1-5-thinking-pro-250415','deepseek-r1',"gemini-2.5-pro-preview-06-05","gemini-2.5-pro","O3"}
-=======
-        self.thinking_models = {'doubao-seed-1-6-thinking-250615','doubao-1-5-thinking-pro-250415','deepseek-r1',"gemini-2.5-pro-preview-06-05","gemini-2.5-pro"}
->>>>>>> 2234950ffc591cf1d0cb103a0ccc306dd83021e1
         # 加载评分数据
         self._load_ratings(ratings_file)
         
@@ -280,11 +273,7 @@ class ChessMatchSampling:
         
         return _call_openai_api(model, url, "hello", api_key)
     
-<<<<<<< HEAD
-    def _create_player_config(self, player_name: str, player_id: str, url: str, api_key: str) -> Tuple[Dict[str, Any], str]:
-=======
-    def _create_player_config(self, player_name: str, player_id: str) -> Tuple[Dict[str, Any], str]:
->>>>>>> 2234950ffc591cf1d0cb103a0ccc306dd83021e1
+    def _create_player_config(self, player_name: str, player_id: str, url: str, api_key: str) -> Dict[str, Any]:
         """
         创建棋手配置
         
@@ -292,36 +281,25 @@ class ChessMatchSampling:
             player_name: 棋手名称
             
         Returns:
-            (配置字典, API URL)
+            配置字典
         """
         parts = player_name.split("_")
-        player_type = parts[-2]
+        player_type = self._extract_player_type(player_name)
         provide_legal_moves = True if parts[-1].lower() == "true" else False
         model_id = self.model_map.get(player_id, player_id)
         
         config = {
             "name": player_name,
-<<<<<<< HEAD
             "api_key": api_key,
             "base_url": url,
             "model": model_id,
             "max_tokens": 4096 if player_id not in self.thinking_models else 16384,
-=======
-            "api_key": self.api_key,
-            "base_url": url,
-            "model": model_id,
-            "max_tokens": 4096 if player_id not in self.thinking_models else 16384 ,
->>>>>>> 2234950ffc591cf1d0cb103a0ccc306dd83021e1
             "play_mode": self.type_map.get(player_type,player_type),
             "provide_legal_moves": provide_legal_moves,
             "provide_move_history": self.provide_move_history
         }
         
-<<<<<<< HEAD
         return config
-=======
-        return config, url
->>>>>>> 2234950ffc591cf1d0cb103a0ccc306dd83021e1
     
     def _execute_match(self, player1_id: str, player1_name: str, player2_id: str, player2_name:str, show_simulation_output: bool = True, save_log: bool = False) -> bool:
         """
@@ -339,8 +317,8 @@ class ChessMatchSampling:
         logger.info(f"开始匹配: {player1_name} vs {player2_name}")
         
         # 解析棋手类型
-        player1_type = player1_name.split("_")[-2]
-        player2_type = player2_name.split("_")[-2]
+        player1_type = self._extract_player_type(player1_name)
+        player2_type = self._extract_player_type(player2_name)
         
         # 创建配置目录
         dir_path = f"./config/{player1_type}_vs_{player2_type}"
@@ -348,19 +326,14 @@ class ChessMatchSampling:
         
         # 创建棋手配置
         try:
-<<<<<<< HEAD
-            white_config = self._create_player_config(player1_name,player1_id,self.player1_url,self.player1_api_key)
-            black_config = self._create_player_config(player2_name,player2_id,self.player2_url,self.player2_api_key)
-=======
-            white_config, white_url = self._create_player_config(player1_name,player1_id)
-            black_config, black_url = self._create_player_config(player2_name,player2_id)
->>>>>>> 2234950ffc591cf1d0cb103a0ccc306dd83021e1
+            white_config = self._create_player_config(player1_name, player1_id, self.player1_url, self.player1_api_key)
+            black_config = self._create_player_config(player2_name, player2_id, self.player2_url, self.player2_api_key)
             
             # 测试模型可用性
-            if not self._test_model_availability(white_url, white_config["model"], self.api_key):
+            if not self._test_model_availability(self.player1_url, white_config["model"], self.player1_api_key):
                 raise ValueError(f"白方模型不可用: {white_config['model']}")
                 
-            if not self._test_model_availability(black_url, black_config["model"], self.api_key):
+            if not self._test_model_availability(self.player2_url, black_config["model"], self.player2_api_key):
                 raise ValueError(f"黑方模型不可用: {black_config['model']}")
             
         except Exception as e:
@@ -469,7 +442,7 @@ class ChessMatchSampling:
         
         # 随机选择第一个棋手
         player1_name = random.choice(list(self.players.keys()))
-        player1_id = "_".join(player1_name.split("_")[:-2])
+        player1_id = self._extract_player_id(player1_name)
         logger.info(f"随机选择棋手: {player1_name}")
         
         info_enhancement = self.calculate_information_enhancement(player1_name)
@@ -481,8 +454,8 @@ class ChessMatchSampling:
         # 从前3个候选对手中随机选择
         top_candidates = info_enhancement[:min(3, len(info_enhancement))]
         player2_name = random.choice(top_candidates)[0]
-        player2_id = "_".join(player2_name.split("_")[:-2])
-        logger.info(f"选择对手: {player2} (信息增强度: {info_enhancement[0][1]:.4f})")
+        player2_id = self._extract_player_id(player2_name)
+        logger.info(f"选择对手: {player2_name} (信息增强度: {info_enhancement[0][1]:.4f})")
         
         # 执行匹配直到成功
         max_attempts = 5
@@ -494,10 +467,11 @@ class ChessMatchSampling:
             
             # 如果还有其他候选对手，换一个试试
             if len(top_candidates) > 1:
-                top_candidates = [c for c in top_candidates if c[0] != player2]
+                top_candidates = [c for c in top_candidates if c[0] != player2_name]
                 if top_candidates:
-                    player2 = random.choice(top_candidates)[0]
-                    logger.info(f"更换对手: {player2}")
+                    player2_name = random.choice(top_candidates)[0]
+                    player2_id = self._extract_player_id(player2_name)
+                    logger.info(f"更换对手: {player2_name}")
         
         logger.error("所有匹配尝试都失败了")
         return False
@@ -528,7 +502,7 @@ class ChessMatchSampling:
         # 从前3个候选对手中随机选择
         top_candidates = info_enhancement[:min(3, len(info_enhancement))]
         player2_name = random.choice(top_candidates)[0]
-        player2_id = "_".join(player2_name.split("_")[:-2])
+        player2_id = self._extract_player_id(player2_name)
         logger.info(f"选择对手: {player2_name} (信息增强度: {info_enhancement[0][1]:.4f})")
         
         # 执行匹配直到成功
@@ -579,13 +553,12 @@ def main():
     parser = argparse.ArgumentParser(description="Run chess simulations between LLMs")
     parser.add_argument("--target", default=False,action="store_true", help='if target sampling')
     parser.add_argument("--player1_id", type=str, default="gpt-4.1", help="first player model id(for openai client call)")
-<<<<<<< HEAD
     parser.add_argument("--player1_name", type=str, default="gpt-4.1", help="first player model name(for our chessArena ratings record),\
         need follow play mode and whether provide legal moves; player1_name must in our ratings.json")
     parser.add_argument("--player1_play_mode",type=str,default="blitz")
     parser.add_argument("--player1_provide_legal_moves",action="store_true")
-    parser.add_argument("--player1_api_key",type="str",default="dummy")
-    parser.add_argument("--player1_base_url",type="str",default="http://0.0.0.1:8000/v1/chat/completions")
+    parser.add_argument("--player1_api_key",type=str,default="dummy")
+    parser.add_argument("--player1_base_url",type=str,default="http://0.0.0.1:8000/v1/chat/completions")
     parser.add_argument("--games", type=int, default=2, help="Number of games to run") 
     args = parser.parse_args()
     args.player1_name = f"{args.player1_name}_{args.player1_play_mode}_{str(args.player1_provide_legal_moves)}"
@@ -593,16 +566,6 @@ def main():
         try:
             # 初始化匹配采样器
             sampler = ChessMatchSampling(args)
-=======
-    parser.add_argument("--player1_name", type=str, default="gpt-4.1_blitz_True", help="first player model name(for our chessArena ratings record),\
-        need follow play mode and whether provide legal moves; player1_name must in our ratings.json")
-    parser.add_argument("--games", type=int, default=2, help="Number of games to run") 
-    args = parser.parse_args()
-    for _ in range(args.games//2):
-        try:
-            # 初始化匹配采样器
-            sampler = ChessMatchSampling()
->>>>>>> 2234950ffc591cf1d0cb103a0ccc306dd83021e1
             # 显示统计信息
             stats = sampler.get_player_stats()
             logger.info(f"系统统计: {stats}")
