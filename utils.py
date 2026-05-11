@@ -58,10 +58,7 @@ def connect_gpt(model, url, messages, max_tokens,temperature,top_p,api_key,enabl
                         json=payload,
                         timeout=3600
                     )
-<<<<<<< HEAD
             #print(response.json())
-=======
->>>>>>> 2234950ffc591cf1d0cb103a0ccc306dd83021e1
             reasoning_content = response.json()['choices'][0]['message'].get('reasoning_content',"")
             if not reasoning_content:
                 reasoning_content = ""

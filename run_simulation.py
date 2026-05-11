@@ -9,7 +9,7 @@ import concurrent.futures
 import argparse
 from pathlib import Path
 from dataclasses import dataclass
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Optional, Any, Tuple
 import re
 from datetime import datetime
 from openai import OpenAI
@@ -33,6 +33,14 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger("chess_simulation")
+
+ATTEMPT_STAT_KEYS = (
+    "total_attempts",
+    "parsing_errors",
+    "illegal_moves",
+    "forbidden_thinking",
+    "successful_moves",
+)
 
 @dataclass
 class PlayerConfig:
@@ -58,6 +66,22 @@ class GameConfig:
     max_retries: int = 3
     log_directory: str = "game_logs"
     stockfish_path: str = "./stockfish"  # Add stockfish path parameter
+
+
+def _empty_player_stats() -> Dict[str, int]:
+    return {
+        "total_attempts": 0,
+        "forbidden_thinking": 0,
+        "parsing_errors": 0,
+        "illegal_moves": 0,
+        "successful_moves": 0,
+        "total_moves": 0,
+        "optimal_moves": 0,
+    }
+
+
+def _init_player_stats(player_names: List[str]) -> Dict[str, Dict[str, int]]:
+    return {player_name: _empty_player_stats() for player_name in player_names}
 
 def setup_game_logging(game_id: str, log_dir: str) -> logging.Logger:
     """Setup logging for a specific game."""
@@ -278,26 +302,10 @@ def play_game(game_id, game_config):
     game_over = False
     
     # Track attempt statistics for each player
-    player_stats = {
-        game_config.white_player.name: {
-            "total_attempts": 0,
-            "forbidden_thinking":0,
-            "parsing_errors": 0,
-            "illegal_moves": 0,
-            "successful_moves": 0,
-            "total_moves": 0,
-            "optimal_moves": 0  # Count of moves that were in top 3 recommended by Stockfish
-        },
-        game_config.black_player.name: {
-            "total_attempts": 0,
-            "forbidden_thinking":0,
-            "parsing_errors": 0,
-            "illegal_moves": 0,
-            "successful_moves": 0,
-            "total_moves": 0,
-            "optimal_moves": 0
-        }
-    }
+    player_stats = _init_player_stats([
+        game_config.white_player.name,
+        game_config.black_player.name,
+    ])
     
     # Initialize OpenAI clients
     white_client = OpenAI(
@@ -375,7 +383,7 @@ def play_game(game_id, game_config):
             if game_config.white_player.play_mode == "blindfold_multiTurn":
                 chat_histories[game_config.white_player.name] = [{"role":item['role'],"content":item['content']} for item in all_record_prompt_and_response[-1]]
             # Update player statistics
-            for stat_key in ["total_attempts", "parsing_errors", "illegal_moves","forbidden_thinking", "successful_moves"]:
+            for stat_key in ATTEMPT_STAT_KEYS:
                 player_stats[current_player][stat_key] += attempt_stats.get(stat_key, 0)
             
         # Black's turn
@@ -402,7 +410,7 @@ def play_game(game_id, game_config):
             if game_config.black_player.play_mode == "blindfold_multiTurn":
                 chat_histories[game_config.black_player.name] = [{"role":item['role'],"content":item['content']} for item in all_record_prompt_and_response[-1]]
             # Update player statistics
-            for stat_key in ["total_attempts", "parsing_errors", "illegal_moves","forbidden_thinking", "successful_moves"]:
+            for stat_key in ATTEMPT_STAT_KEYS:
                 player_stats[current_player][stat_key] += attempt_stats.get(stat_key, 0)
 
         if move_uci is None:
@@ -599,55 +607,45 @@ def play_game(game_id, game_config):
         
     return game_results
 
+def _normalize_player_name(player_data: Dict[str, Any]) -> str:
+    """Return the canonical player name used in logs and rating records."""
+    name = player_data["name"]
+    play_mode = player_data.get("play_mode", "blitz")
+    provide_legal_moves = player_data.get("provide_legal_moves", PlayerConfig.provide_legal_moves)
+    legal_moves_suffix = str(provide_legal_moves)
+
+    if name.endswith(f"_{play_mode}_{legal_moves_suffix}"):
+        return name
+    if name.endswith(f"_{play_mode}"):
+        return f"{name}_{legal_moves_suffix}"
+    return f"{name}_{play_mode}_{legal_moves_suffix}"
+
+
+def _create_player_config(player_data: Dict[str, Any]) -> PlayerConfig:
+    """Create a PlayerConfig from one side of the JSON config."""
+    return PlayerConfig(
+        name=_normalize_player_name(player_data),
+        api_key=player_data.get("api_key", "dummy"),
+        base_url=player_data["base_url"],
+        model=player_data["model"],
+        temperature=player_data.get("temperature", 0.2),
+        top_p=player_data.get("top_p", 1.0),
+        frequency_penalty=player_data.get("frequency_penalty", 0),
+        max_tokens=player_data.get("max_tokens", 500),
+        provide_legal_moves=player_data.get("provide_legal_moves", PlayerConfig.provide_legal_moves),
+        provide_move_history=player_data.get("provide_move_history", PlayerConfig.provide_move_history),
+        play_mode=player_data.get("play_mode", "blitz"),
+    )
+
+
 def load_config(config_file):
     """Load configuration from a JSON file."""
     with open(config_file, 'r') as f:
         config_data = json.load(f)
     
     # Create player configs
-    white_player = PlayerConfig(
-<<<<<<< HEAD
-        name=config_data["white_player"]["name"] + "_" + config_data["white_player"]["play_mode"] + "_" + str(config_data["white_player"].get("provide_legal_moves", True)),
-=======
-        name=config_data["white_player"]["name"],
->>>>>>> 2234950ffc591cf1d0cb103a0ccc306dd83021e1
-        api_key=config_data["white_player"].get("api_key", "dummy"),
-        base_url=config_data["white_player"]["base_url"],
-        model=config_data["white_player"]["model"],
-        temperature=config_data["white_player"].get("temperature", 0.2),
-        top_p=config_data["white_player"].get("top_p", 1.0),
-        frequency_penalty=config_data["white_player"].get("frequency_penalty",0),
-        max_tokens=config_data["white_player"].get("max_tokens", 500),
-<<<<<<< HEAD
-        provide_legal_moves=config_data["white_player"].get("provide_legal_moves", True),
-=======
-        provide_legal_moves=config_data["white_player"].get("provide_legal_moves", False),
->>>>>>> 2234950ffc591cf1d0cb103a0ccc306dd83021e1
-        provide_move_history=config_data["white_player"].get("provide_move_history", False),
-        play_mode=config_data["white_player"].get("play_mode","blitz"),
-    )
-    
-    black_player = PlayerConfig(
-<<<<<<< HEAD
-        name=config_data["black_player"]["name"] + "_" + config_data["black_player"]["play_mode"] + "_" + str(config_data["black_player"].get("provide_legal_moves", True)),
-=======
-        name=config_data["black_player"]["name"],
->>>>>>> 2234950ffc591cf1d0cb103a0ccc306dd83021e1
-        api_key=config_data["black_player"].get("api_key", "dummy"),
-        base_url=config_data["black_player"]["base_url"],
-        model=config_data["black_player"]["model"],
-        temperature=config_data["black_player"].get("temperature", 0.2),
-        top_p=config_data["black_player"].get("top_p", 1.0),
-        frequency_penalty=config_data["black_player"].get("frequency_penalty",0),
-        max_tokens=config_data["black_player"].get("max_tokens", 500),
-<<<<<<< HEAD
-        provide_legal_moves=config_data["black_player"].get("provide_legal_moves", True),
-=======
-        provide_legal_moves=config_data["black_player"].get("provide_legal_moves", False),
->>>>>>> 2234950ffc591cf1d0cb103a0ccc306dd83021e1
-        provide_move_history=config_data["black_player"].get("provide_move_history", False),
-        play_mode=config_data["black_player"].get("play_mode","blitz"),
-    )
+    white_player = _create_player_config(config_data["white_player"])
+    black_player = _create_player_config(config_data["black_player"])
     
     log_dir = os.path.join("simulation_record",f"{white_player.play_mode}-{black_player.play_mode}",f"{white_player.name}-vs-{black_player.name}")
     # Create game config
@@ -661,6 +659,56 @@ def load_config(config_file):
     )
     
     return game_config
+
+
+def _simulation_game_config(
+    base_config: GameConfig,
+    white_player: PlayerConfig,
+    black_player: PlayerConfig,
+    log_directory: str,
+) -> GameConfig:
+    return GameConfig(
+        white_player=white_player,
+        black_player=black_player,
+        max_moves=base_config.max_moves,
+        max_retries=base_config.max_retries,
+        log_directory=log_directory,
+        stockfish_path=base_config.stockfish_path,
+    )
+
+
+def _build_game_configs(
+    original_config: GameConfig,
+    simulation_log_dir: str,
+    simulation_id: str,
+    num_games: int,
+) -> List[Tuple[str, GameConfig]]:
+    player1_name = original_config.white_player.name
+    player2_name = original_config.black_player.name
+    game_configs = []
+
+    for i in range(num_games // 2):
+        log_directory = os.path.join(simulation_log_dir, f"game_{i+1}_{player1_name}_white")
+        config = _simulation_game_config(
+            original_config,
+            original_config.white_player,
+            original_config.black_player,
+            log_directory,
+        )
+        game_configs.append((f"{simulation_id}_{i+1}", config))
+
+    for i in range(num_games // 2, num_games):
+        log_directory = os.path.join(simulation_log_dir, f"game_{i+1}_{player2_name}_white")
+        config = _simulation_game_config(
+            original_config,
+            original_config.black_player,
+            original_config.white_player,
+            log_directory,
+        )
+        game_configs.append((f"{simulation_id}_{i+1}", config))
+
+    return game_configs
+
 
 def run_simulation(config_file, num_games, parallel_games):
     """Run a simulation of multiple chess games."""
@@ -688,38 +736,9 @@ def run_simulation(config_file, num_games, parallel_games):
     Path(simulation_log_dir).mkdir(parents=True, exist_ok=True)
     
     # Create game configurations with swapped players for half the games
-    game_configs = []
     player1_name = original_config.white_player.name
     player2_name = original_config.black_player.name
-    
-    # Create configurations for the first half (original configuration)
-    for i in range(num_games // 2):
-        config = GameConfig(
-            white_player=original_config.white_player,
-            black_player=original_config.black_player,
-            max_moves=original_config.max_moves,
-            max_retries=original_config.max_retries,
-            log_directory=os.path.join(simulation_log_dir, f"game_{i+1}_{player1_name}_white"),
-            stockfish_path=original_config.stockfish_path
-        )
-        game_configs.append((f"{simulation_id}_{i+1}", config))
-    
-    
-    #play mode exchange
-    #original_config.white_player.play_mode, original_config.black_player.play_mode = \
-        #original_config.black_player.play_mode, original_config.white_player.play_mode
-    # Create configurations for the second half (swapped players)
-    for i in range(num_games // 2, num_games):
-        # Swap white and black players
-        config = GameConfig(
-            white_player=original_config.black_player,
-            black_player=original_config.white_player,
-            max_moves=original_config.max_moves,
-            max_retries=original_config.max_retries,
-            log_directory=os.path.join(simulation_log_dir, f"game_{i+1}_{player2_name}_white"),
-            stockfish_path=original_config.stockfish_path
-        )
-        game_configs.append((f"{simulation_id}_{i+1}", config))
+    game_configs = _build_game_configs(original_config, simulation_log_dir, simulation_id, num_games)
     
     # Run games in parallel
     start_time = time.time()
@@ -750,26 +769,7 @@ def run_simulation(config_file, num_games, parallel_games):
     draws = 0
     
     # Aggregate player statistics
-    player_stats = {
-        player1_name: {
-            "total_attempts": 0,
-            "parsing_errors": 0,
-            "illegal_moves": 0,
-            "forbidden_thinking": 0,
-            "successful_moves": 0,
-            "total_moves": 0,
-            "optimal_moves": 0
-        },
-        player2_name: {
-            "total_attempts": 0,
-            "parsing_errors": 0,
-            "illegal_moves": 0,
-            "forbidden_thinking": 0,
-            "successful_moves": 0,
-            "total_moves": 0,
-            "optimal_moves": 0
-        }
-    }
+    player_stats = _init_player_stats([player1_name, player2_name])
     
     for result in all_results:
         # Get player statistics
